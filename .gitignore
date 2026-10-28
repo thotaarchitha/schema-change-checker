@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+warehouse/target/
+warehouse/logs/
+warehouse/dbt_packages/
+warehouse/.user.yml
+report.md
+report.json
+*.egg-info/
+warehouse/target_*/
+dbt_build.log
+compile.log
