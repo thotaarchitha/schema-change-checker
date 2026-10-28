@@ -1,0 +1,14 @@
+# Safe to commit: every value comes from the environment, and the password has
+# no default, so a missing DBT_PG_PASSWORD fails loudly instead of guessing.
+shop:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_PG_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PG_PORT', '5432') | int }}"
+      user: "{{ env_var('DBT_PG_USER', 'postgres') }}"
+      password: "{{ env_var('DBT_PG_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_PG_DBNAME', 'shop') }}"
+      schema: analytics
+      threads: 4

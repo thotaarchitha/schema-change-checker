@@ -1,0 +1,34 @@
+name: shop
+version: "1.0.0"
+config-version: 2
+profile: shop
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+seeds:
+  shop:
+    +quote_columns: false
+    # Pin seed types so dbt's inference can't flip a column between runs
+    customers:
+      +column_types: {id: integer, signup_date: date}
+    products:
+      +column_types: {id: integer, unit_price: "numeric(10,2)"}
+    orders:
+      +column_types: {id: integer, customer_id: integer, order_date: date, status: text, discount: "numeric(4,2)"}
+    order_items:
+      +column_types: {id: integer, order_id: integer, product_id: integer, quantity: integer}
+    payments:
+      +column_types: {id: integer, order_id: integer, amount: bigint}
+
+models:
+  shop:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
