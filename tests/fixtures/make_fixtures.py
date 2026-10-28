@@ -138,7 +138,9 @@ def main() -> None:
         for side, manifest in (("base", base), ("head", head)):
             (case_dir / side).mkdir(parents=True, exist_ok=True)
             (case_dir / side / "manifest.json").write_text(
-                json.dumps(manifest, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+                json.dumps(manifest, indent=1, sort_keys=True) + "\n",
+                encoding="utf-8",
+                newline="\n",  # Windows would write CRLF and every fixture would show as changed
             )
         print(f"wrote {case_dir.relative_to(ROOT)}")
 
