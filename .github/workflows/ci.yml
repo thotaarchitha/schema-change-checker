@@ -12,6 +12,7 @@ permissions:
 jobs:
   checker:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,6 +27,8 @@ jobs:
 
   warehouse:
     runs-on: ubuntu-latest
+    # Seeding ~117k order lines is the slow part; past this something is stuck
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
