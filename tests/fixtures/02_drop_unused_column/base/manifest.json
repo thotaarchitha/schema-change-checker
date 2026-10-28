@@ -89,7 +89,7 @@
    "resource_type": "model"
   },
   "model.shop.mart_customer_ltv": {
-   "compiled_code": "-- LTV here is cash actually collected (payments), not booked revenue,\n-- because returns and unpaid orders make booked revenue optimistic.\nselect\n    c.customer_id,\n    c.email,\n    c.signup_date,\n    c.order_count,\n    coalesce(sum(f.amount_paid), 0) as lifetime_value,\n    case\n        when coalesce(sum(f.amount_paid), 0) >= 2000 then 'high'\n        when coalesce(sum(f.amount_paid), 0) >= 500 then 'medium'\n        else 'low'\n    end as value_tier\nfrom \"shop\".\"analytics\".\"dim_customers\" as c\nleft join \"shop\".\"analytics\".\"fct_orders\" as f on c.customer_id = f.customer_id\ngroup by c.customer_id, c.email, c.signup_date, c.order_count",
+   "compiled_code": "-- LTV here is cash actually collected (payments), not booked revenue,\n-- because returns and unpaid orders make booked revenue optimistic.\n-- Cut-offs put roughly the bottom and top fifth of the sample data in low and high.\nselect\n    c.customer_id,\n    c.email,\n    c.signup_date,\n    c.order_count,\n    coalesce(sum(f.amount_paid), 0) as lifetime_value,\n    case\n        when coalesce(sum(f.amount_paid), 0) >= 6000 then 'high'\n        when coalesce(sum(f.amount_paid), 0) >= 2500 then 'medium'\n        else 'low'\n    end as value_tier\nfrom \"shop\".\"analytics\".\"dim_customers\" as c\nleft join \"shop\".\"analytics\".\"fct_orders\" as f on c.customer_id = f.customer_id\ngroup by c.customer_id, c.email, c.signup_date, c.order_count",
    "depends_on": {
     "nodes": [
      "model.shop.dim_customers",
