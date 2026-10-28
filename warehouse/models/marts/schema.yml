@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: Customer dimension with lifetime order stats.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+
+  - name: dim_products
+    description: Product dimension. Selects * from staging and adds a price tier.
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+
+  - name: fct_orders
+    description: Order fact table, one row per order.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_id
+      - name: net_revenue
+        description: Gross minus discount. What finance calls revenue.
+
+  - name: mart_daily_revenue
+    description: Gross and net revenue per day and product category, completed and shipped orders only.
+    columns:
+      - name: revenue_date
+        data_tests: [not_null]
+      - name: category
+        data_tests: [not_null]
+
+  - name: mart_customer_ltv
+    description: Lifetime value per customer, based on cash collected.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]

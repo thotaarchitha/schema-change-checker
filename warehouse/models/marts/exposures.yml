@@ -1,0 +1,25 @@
+version: 2
+
+exposures:
+  - name: revenue_dashboard
+    label: Revenue Dashboard
+    type: dashboard
+    maturity: high
+    description: Daily revenue by category, plus an order-level drilldown. Finance looks at this every morning.
+    depends_on:
+      - ref('mart_daily_revenue')
+      - ref('fct_orders')
+    owner:
+      name: Finance Analytics
+      email: finance-analytics@example.com
+
+  - name: customer_health_report
+    label: Customer Health Report
+    type: analysis
+    maturity: medium
+    description: Weekly look at customer lifetime value tiers.
+    depends_on:
+      - ref('mart_customer_ltv')
+    owner:
+      name: Growth Team
+      email: growth@example.com

@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: int_order_totals
+    description: Gross, discount and net amount per order, computed from order lines and list prices.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: discount_amount
+        description: Gross amount times the order's discount rate, rounded to cents.
+      - name: net_amount
+        description: Gross minus discount.
+
+  - name: int_customer_orders
+    description: Non-cancelled order counts and first/last order dates per customer.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
