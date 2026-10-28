@@ -1,0 +1,124 @@
+name: schema-check
+
+on:
+  pull_request:
+    # labeled/unlabeled so adding the override label re-runs the check
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: schema-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: shop
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 20
+    env:
+      # dbt compile opens a connection even though nothing gets built
+      DBT_PG_PASSWORD: ci-only
+      DBT_PG_HOST: localhost
+      OVERRIDE_LABEL: breaking-change-approved
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Check out the base branch next to the PR
+        run: git worktree add ../base "origin/${{ github.base_ref }}"
+
+      - name: Compile both branches
+        id: compile
+        run: |
+          for dir in ../base/warehouse warehouse; do
+            if ! (cd "$dir" && dbt compile --profiles-dir .) > compile.log 2>&1; then
+              {
+                echo "<!-- schema-change-checker -->"
+                echo "### Schema Change Checker: dbt compile failed in \`${dir#../}\`"
+                echo
+                echo '```'
+                tail -n 25 compile.log
+                echo '```'
+                echo
+                echo "**Result: ERROR.** The checker needs a compiled manifest from both branches."
+                echo "A ref() to a model this PR deletes is the usual cause."
+              } > report.md
+              echo "failed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+
+      - name: Run schemacheck
+        id: check
+        if: steps.compile.outputs.failed != 'true'
+        run: |
+          set +e
+          python -m schemacheck \
+            --base ../base/warehouse/target/manifest.json \
+            --head warehouse/target/manifest.json \
+            --out report.md --json report.json
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update the PR comment
+        if: always() && hashFiles('report.md') != ''
+        # Fork PRs get a read-only token and can't comment; don't let that hide the result
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- schema-change-checker -->")) | .id' | head -n 1)
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@report.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file report.md
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schema-check-report
+          path: |
+            report.md
+            report.json
+          if-no-files-found: ignore
+
+      - name: Decide
+        env:
+          CODE: ${{ steps.check.outputs.code }}
+          COMPILE_FAILED: ${{ steps.compile.outputs.failed }}
+          APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'breaking-change-approved') }}
+        run: |
+          if [ "$COMPILE_FAILED" = "true" ]; then echo "::error::dbt compile failed"; exit 1; fi
+          case "$CODE" in
+            0) echo "No breaking changes." ;;
+            1) if [ "$APPROVED" = "true" ]; then
+                 echo "::warning::Breaking changes approved with the $OVERRIDE_LABEL label."
+               else
+                 echo "::error::Breaking changes found. Add the $OVERRIDE_LABEL label to merge anyway."
+                 exit 1
+               fi ;;
+            *) echo "::error::schemacheck itself failed (exit $CODE). See the PR comment."; exit 1 ;;
+          esac
