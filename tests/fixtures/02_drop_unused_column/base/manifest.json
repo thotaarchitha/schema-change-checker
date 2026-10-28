@@ -1,0 +1,309 @@
+{
+ "exposures": {
+  "exposure.shop.customer_health_report": {
+   "depends_on": {
+    "nodes": [
+     "model.shop.mart_customer_ltv"
+    ]
+   },
+   "label": "Customer Health Report",
+   "name": "customer_health_report"
+  },
+  "exposure.shop.revenue_dashboard": {
+   "depends_on": {
+    "nodes": [
+     "model.shop.mart_daily_revenue",
+     "model.shop.fct_orders"
+    ]
+   },
+   "label": "Revenue Dashboard",
+   "name": "revenue_dashboard"
+  }
+ },
+ "metadata": {
+  "note": "trimmed by tests/fixtures/make_fixtures.py"
+ },
+ "nodes": {
+  "model.shop.dim_customers": {
+   "compiled_code": "select\n    c.customer_id,\n    c.first_name,\n    c.last_name,\n    c.email,\n    c.city,\n    c.signup_date,\n    coalesce(co.order_count, 0) as order_count,\n    co.first_order_date,\n    co.last_order_date\nfrom \"shop\".\"analytics\".\"stg_customers\" as c\nleft join \"shop\".\"analytics\".\"int_customer_orders\" as co on c.customer_id = co.customer_id",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_customers",
+     "model.shop.int_customer_orders"
+    ]
+   },
+   "name": "dim_customers",
+   "original_file_path": "models\\marts\\dim_customers.sql",
+   "relation_name": "\"shop\".\"analytics\".\"dim_customers\"",
+   "resource_type": "model"
+  },
+  "model.shop.dim_products": {
+   "compiled_code": "-- select * on purpose: whatever staging exposes, the dimension exposes.\n-- Convenient, and exactly the kind of thing that hides a dropped column.\nselect\n    *,\n    case\n        when unit_price >= 200 then 'premium'\n        when unit_price >= 50 then 'mid'\n        else 'budget'\n    end as price_tier\nfrom \"shop\".\"analytics\".\"stg_products\"",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_products"
+    ]
+   },
+   "name": "dim_products",
+   "original_file_path": "models\\marts\\dim_products.sql",
+   "relation_name": "\"shop\".\"analytics\".\"dim_products\"",
+   "resource_type": "model"
+  },
+  "model.shop.fct_orders": {
+   "compiled_code": "with paid as (\n    select\n        order_id,\n        sum(amount) as amount_paid,\n        count(*) as payment_count\n    from \"shop\".\"analytics\".\"stg_payments\"\n    group by order_id\n)\n\nselect\n    t.order_id,\n    t.customer_id,\n    t.order_date,\n    t.status,\n    t.gross_amount,\n    t.discount_amount,\n    t.net_amount as net_revenue,\n    coalesce(p.amount_paid, 0) as amount_paid,\n    coalesce(p.payment_count, 0) as payment_count\nfrom \"shop\".\"analytics\".\"int_order_totals\" as t\nleft join paid as p on t.order_id = p.order_id",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_payments",
+     "model.shop.int_order_totals"
+    ]
+   },
+   "name": "fct_orders",
+   "original_file_path": "models\\marts\\fct_orders.sql",
+   "relation_name": "\"shop\".\"analytics\".\"fct_orders\"",
+   "resource_type": "model"
+  },
+  "model.shop.int_customer_orders": {
+   "compiled_code": "select\n    customer_id,\n    count(*) as order_count,\n    min(order_date) as first_order_date,\n    max(order_date) as last_order_date\nfrom \"shop\".\"analytics\".\"stg_orders\"\nwhere status <> 'cancelled'\ngroup by customer_id",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_orders"
+    ]
+   },
+   "name": "int_customer_orders",
+   "original_file_path": "models\\intermediate\\int_customer_orders.sql",
+   "relation_name": "\"shop\".\"analytics\".\"int_customer_orders\"",
+   "resource_type": "model"
+  },
+  "model.shop.int_order_totals": {
+   "compiled_code": "with items as (\n    select\n        oi.order_id,\n        sum(oi.quantity * p.unit_price) as gross_amount\n    from \"shop\".\"analytics\".\"stg_order_items\" as oi\n    inner join \"shop\".\"analytics\".\"stg_products\" as p on oi.product_id = p.product_id\n    group by oi.order_id\n),\n\norders as (\n    -- discount is a rate (0.10 = 10% off), not an amount; naming it that way here\n    select\n        order_id,\n        customer_id,\n        order_date,\n        status,\n        discount as discount_rate\n    from \"shop\".\"analytics\".\"stg_orders\"\n)\n\nselect\n    o.order_id,\n    o.customer_id,\n    o.order_date,\n    o.status,\n    coalesce(i.gross_amount, 0) as gross_amount,\n    round(coalesce(i.gross_amount, 0) * o.discount_rate, 2) as discount_amount,\n    coalesce(i.gross_amount, 0) - round(coalesce(i.gross_amount, 0) * o.discount_rate, 2) as net_amount\nfrom orders as o\nleft join items as i on o.order_id = i.order_id",
+   "depends_on": {
+    "nodes": [
+     "model.shop.stg_order_items",
+     "model.shop.stg_products",
+     "model.shop.stg_orders"
+    ]
+   },
+   "name": "int_order_totals",
+   "original_file_path": "models\\intermediate\\int_order_totals.sql",
+   "relation_name": "\"shop\".\"analytics\".\"int_order_totals\"",
+   "resource_type": "model"
+  },
+  "model.shop.mart_customer_ltv": {
+   "compiled_code": "-- LTV here is cash actually collected (payments), not booked revenue,\n-- because returns and unpaid orders make booked revenue optimistic.\nselect\n    c.customer_id,\n    c.email,\n    c.signup_date,\n    c.order_count,\n    coalesce(sum(f.amount_paid), 0) as lifetime_value,\n    case\n        when coalesce(sum(f.amount_paid), 0) >= 2000 then 'high'\n        when coalesce(sum(f.amount_paid), 0) >= 500 then 'medium'\n        else 'low'\n    end as value_tier\nfrom \"shop\".\"analytics\".\"dim_customers\" as c\nleft join \"shop\".\"analytics\".\"fct_orders\" as f on c.customer_id = f.customer_id\ngroup by c.customer_id, c.email, c.signup_date, c.order_count",
+   "depends_on": {
+    "nodes": [
+     "model.shop.dim_customers",
+     "model.shop.fct_orders"
+    ]
+   },
+   "name": "mart_customer_ltv",
+   "original_file_path": "models\\marts\\mart_customer_ltv.sql",
+   "relation_name": "\"shop\".\"analytics\".\"mart_customer_ltv\"",
+   "resource_type": "model"
+  },
+  "model.shop.mart_daily_revenue": {
+   "compiled_code": "-- Net revenue is spread across an order's lines by their share of gross,\n-- so a discounted order doesn't make one category look better than it is.\nwith lines as (\n    select\n        f.order_date,\n        dp.category,\n        oi.quantity * dp.unit_price as line_gross,\n        f.gross_amount,\n        f.net_revenue\n    from \"shop\".\"analytics\".\"fct_orders\" as f\n    inner join \"shop\".\"analytics\".\"stg_order_items\" as oi on f.order_id = oi.order_id\n    inner join \"shop\".\"analytics\".\"dim_products\" as dp on oi.product_id = dp.product_id\n    where f.status in ('completed', 'shipped')\n)\n\nselect\n    order_date as revenue_date,\n    category,\n    count(*) as line_count,\n    sum(line_gross) as gross_revenue,\n    round(sum(case when gross_amount > 0 then net_revenue * line_gross / gross_amount else 0 end), 2) as net_revenue\nfrom lines\ngroup by order_date, category",
+   "depends_on": {
+    "nodes": [
+     "model.shop.fct_orders",
+     "model.shop.stg_order_items",
+     "model.shop.dim_products"
+    ]
+   },
+   "name": "mart_daily_revenue",
+   "original_file_path": "models\\marts\\mart_daily_revenue.sql",
+   "relation_name": "\"shop\".\"analytics\".\"mart_daily_revenue\"",
+   "resource_type": "model"
+  },
+  "model.shop.stg_customers": {
+   "compiled_code": "select\n    id as customer_id,\n    first_name,\n    last_name,\n    lower(email) as email,\n    city,\n    signup_date\nfrom \"shop\".\"analytics\".\"customers\"",
+   "depends_on": {
+    "nodes": [
+     "seed.shop.customers"
+    ]
+   },
+   "name": "stg_customers",
+   "original_file_path": "models\\staging\\stg_customers.sql",
+   "relation_name": "\"shop\".\"analytics\".\"stg_customers\"",
+   "resource_type": "model"
+  },
+  "model.shop.stg_order_items": {
+   "compiled_code": "select\n    id as order_item_id,\n    order_id,\n    product_id,\n    quantity\nfrom \"shop\".\"analytics\".\"order_items\"\nwhere quantity > 0",
+   "depends_on": {
+    "nodes": [
+     "seed.shop.order_items"
+    ]
+   },
+   "name": "stg_order_items",
+   "original_file_path": "models\\staging\\stg_order_items.sql",
+   "relation_name": "\"shop\".\"analytics\".\"stg_order_items\"",
+   "resource_type": "model"
+  },
+  "model.shop.stg_orders": {
+   "compiled_code": "-- The source system has written every status spelling it could think of.\nselect\n    id as order_id,\n    customer_id,\n    order_date,\n    case\n        when lower(trim(status)) in ('completed', 'complete') then 'completed'\n        when lower(trim(status)) in ('cancelled', 'canceled') then 'cancelled'\n        else lower(trim(status))\n    end as status,\n    coalesce(discount, 0) as discount\nfrom \"shop\".\"analytics\".\"orders\"",
+   "depends_on": {
+    "nodes": [
+     "seed.shop.orders"
+    ]
+   },
+   "name": "stg_orders",
+   "original_file_path": "models\\staging\\stg_orders.sql",
+   "relation_name": "\"shop\".\"analytics\".\"stg_orders\"",
+   "resource_type": "model"
+  },
+  "model.shop.stg_payments": {
+   "compiled_code": "select\n    id as payment_id,\n    order_id,\n    method as payment_method,\n    cast(amount / 100.0 as numeric(12, 2)) as amount\nfrom \"shop\".\"analytics\".\"payments\"",
+   "depends_on": {
+    "nodes": [
+     "seed.shop.payments"
+    ]
+   },
+   "name": "stg_payments",
+   "original_file_path": "models\\staging\\stg_payments.sql",
+   "relation_name": "\"shop\".\"analytics\".\"stg_payments\"",
+   "resource_type": "model"
+  },
+  "model.shop.stg_products": {
+   "compiled_code": "select\n    id as product_id,\n    name as product_name,\n    category,\n    cast(unit_price as numeric(10, 2)) as unit_price\nfrom \"shop\".\"analytics\".\"products\"",
+   "depends_on": {
+    "nodes": [
+     "seed.shop.products"
+    ]
+   },
+   "name": "stg_products",
+   "original_file_path": "models\\staging\\stg_products.sql",
+   "relation_name": "\"shop\".\"analytics\".\"stg_products\"",
+   "resource_type": "model"
+  },
+  "seed.shop.customers": {
+   "columns": {
+    "city": {
+     "name": "city"
+    },
+    "email": {
+     "name": "email"
+    },
+    "first_name": {
+     "name": "first_name"
+    },
+    "id": {
+     "name": "id"
+    },
+    "last_name": {
+     "name": "last_name"
+    },
+    "signup_date": {
+     "name": "signup_date"
+    }
+   },
+   "compiled_code": null,
+   "depends_on": {
+    "nodes": []
+   },
+   "name": "customers",
+   "original_file_path": "seeds\\customers.csv",
+   "relation_name": "\"shop\".\"analytics\".\"customers\"",
+   "resource_type": "seed"
+  },
+  "seed.shop.order_items": {
+   "columns": {
+    "id": {
+     "name": "id"
+    },
+    "order_id": {
+     "name": "order_id"
+    },
+    "product_id": {
+     "name": "product_id"
+    },
+    "quantity": {
+     "name": "quantity"
+    }
+   },
+   "compiled_code": null,
+   "depends_on": {
+    "nodes": []
+   },
+   "name": "order_items",
+   "original_file_path": "seeds\\order_items.csv",
+   "relation_name": "\"shop\".\"analytics\".\"order_items\"",
+   "resource_type": "seed"
+  },
+  "seed.shop.orders": {
+   "columns": {
+    "customer_id": {
+     "name": "customer_id"
+    },
+    "discount": {
+     "name": "discount"
+    },
+    "id": {
+     "name": "id"
+    },
+    "order_date": {
+     "name": "order_date"
+    },
+    "status": {
+     "name": "status"
+    }
+   },
+   "compiled_code": null,
+   "depends_on": {
+    "nodes": []
+   },
+   "name": "orders",
+   "original_file_path": "seeds\\orders.csv",
+   "relation_name": "\"shop\".\"analytics\".\"orders\"",
+   "resource_type": "seed"
+  },
+  "seed.shop.payments": {
+   "columns": {
+    "amount": {
+     "name": "amount"
+    },
+    "id": {
+     "name": "id"
+    },
+    "method": {
+     "name": "method"
+    },
+    "order_id": {
+     "name": "order_id"
+    }
+   },
+   "compiled_code": null,
+   "depends_on": {
+    "nodes": []
+   },
+   "name": "payments",
+   "original_file_path": "seeds\\payments.csv",
+   "relation_name": "\"shop\".\"analytics\".\"payments\"",
+   "resource_type": "seed"
+  },
+  "seed.shop.products": {
+   "columns": {
+    "category": {
+     "name": "category"
+    },
+    "id": {
+     "name": "id"
+    },
+    "name": {
+     "name": "name"
+    },
+    "unit_price": {
+     "name": "unit_price"
+    }
+   },
+   "compiled_code": null,
+   "depends_on": {
+    "nodes": []
+   },
+   "name": "products",
+   "original_file_path": "seeds\\products.csv",
+   "relation_name": "\"shop\".\"analytics\".\"products\"",
+   "resource_type": "seed"
+  }
+ },
+ "sources": {}
+}
