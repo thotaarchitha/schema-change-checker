@@ -2,7 +2,7 @@ select
     c.customer_id,
     c.first_name,
     c.last_name,
-    c.email,
+    c.email_address as email,
     c.city,
     c.signup_date,
     coalesce(co.order_count, 0) as order_count,
