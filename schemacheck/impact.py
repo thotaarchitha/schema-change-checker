@@ -151,7 +151,8 @@ def assess(
             ch.exposures = exposed
         else:
             ch.severity = Severity.WARNING
-            ch.reason = "nothing in this project uses it; check consumers outside dbt"
+            what = "the old name" if ch.kind is Kind.COLUMN_RENAMED else "it"
+            ch.reason = f"nothing in this project uses {what} any more; check consumers outside dbt"
 
     for ref in orphans:
         ch = Change(Kind.BROKEN_REFERENCE, ref.model, column=ref.column, severity=Severity.BREAKING)
