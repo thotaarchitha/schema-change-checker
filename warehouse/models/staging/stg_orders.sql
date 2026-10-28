@@ -7,6 +7,5 @@ select
         when lower(trim(status)) in ('completed', 'complete') then 'completed'
         when lower(trim(status)) in ('cancelled', 'canceled') then 'cancelled'
         else lower(trim(status))
-    end as status,
-    coalesce(discount, 0) as discount
+    end as status
 from {{ ref('orders') }}
