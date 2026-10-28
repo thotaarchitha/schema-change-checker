@@ -1,0 +1,27 @@
+[project]
+name = "schemacheck"
+version = "0.1.0"
+description = "Catch breaking dbt schema changes on the pull request, not in next week's dashboard."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = ["sqlglot>=30", "networkx>=3"]
+
+[project.scripts]
+schemacheck = "schemacheck.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["schemacheck"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
