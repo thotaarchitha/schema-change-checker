@@ -3,6 +3,8 @@ name: ci
 on:
   push:
   pull_request:
+  # Lets me re-run CI from the Actions tab without a dummy commit
+  workflow_dispatch:
 
 permissions:
   contents: read
