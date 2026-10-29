@@ -34,8 +34,6 @@ models:
         data_tests:
           - accepted_values:
               values: [placed, shipped, completed, returned, cancelled]
-      - name: discount
-        description: Discount rate applied to the whole order (0.10 = 10% off).
 
   - name: stg_order_items
     description: Order lines. Zero-quantity lines are dropped.
