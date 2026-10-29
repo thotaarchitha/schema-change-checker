@@ -41,14 +41,12 @@ to go down to columns.
 
 These PRs are left open on purpose. Click one to see the check and its comment:
 
-| PR | What it changes | Expected |
+| PR | What it changes | Result |
 |---|---|---|
-| Drop `discount` from `stg_orders` | removes a column three models depend on | fails, 3 models + Revenue Dashboard |
-| Rename customer `email` | `email` → `email_address` in staging only | fails, recognised as a rename |
-| Rename customer `email`, update downstream | same rename, `dim_customers` updated in the same PR | passes with a warning |
-| Add `full_name` to `stg_customers` | new column | passes, listed as safe |
-
-[Open pull requests →](https://github.com/thotaarchitha/schema-change-checker/pulls)
+| [#1 Drop `discount` from `stg_orders`](https://github.com/thotaarchitha/schema-change-checker/pull/1) | removes a column three models depend on | ❌ fails, 3 models + Revenue Dashboard |
+| [#2 Rename customer `email`](https://github.com/thotaarchitha/schema-change-checker/pull/2) | `email` → `email_address` in staging only | ❌ fails, recognised as a rename |
+| [#3 Rename `email`, update downstream](https://github.com/thotaarchitha/schema-change-checker/pull/3) | same rename, `dim_customers` updated in the same PR | ✅ passes with a warning |
+| [#4 Add `full_name` to `stg_customers`](https://github.com/thotaarchitha/schema-change-checker/pull/4) | new column | ✅ passes, listed as safe |
 
 ## How it works
 
