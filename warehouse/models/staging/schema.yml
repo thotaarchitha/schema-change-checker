@@ -7,7 +7,7 @@ models:
       - name: customer_id
         description: Primary key.
         data_tests: [unique, not_null]
-      - name: email
+      - name: email_address
         description: Lowercased email address.
 
   - name: stg_products
